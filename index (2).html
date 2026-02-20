@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Lives Semanais — Grupo Rugido</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans','Segoe UI',sans-serif;background:#0d0d1a;color:#e0e0e0;min-height:100vh}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#0d0d1a}::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+button{font-family:inherit;transition:all .15s ease;cursor:pointer}button:hover{filter:brightness(1.15)}
+.wrap{max-width:940px;margin:0 auto;padding:24px 20px}
+.card{background:#151528;border-radius:12px;padding:16px 14px;border:1px solid #222;position:relative;overflow:hidden}
+.card-bar{position:absolute;top:0;left:0;right:0;height:2px}
+.kpi-label{font-size:10px;color:#777;margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px}
+.kpi-val{font-size:20px;font-weight:800;margin:0 0 1px}
+.kpi-sub{font-size:10px;color:#555;margin:0}
+.grid{display:grid;gap:10px}
+.g6{grid-template-columns:repeat(6,1fr)}.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:repeat(2,1fr)}
+.nav-btn{padding:8px 14px;font-size:13px;font-weight:700;border-radius:8px;min-width:44px}
+.nav-btn.active{background:#8b5cf614;color:#8b5cf6;border:1px solid #8b5cf633}
+.nav-btn.inactive{background:#151528;color:#888;border:1px solid #222}
+.nav-btn.overview{padding:8px 18px}
+.nav-btn.overview.active{background:#22c55e14;color:#22c55e;border:1px solid #22c55e33}
+.fi{animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* Chart styles */
+.chart-container{padding:18px 14px 12px}
+.chart-row{display:flex;align-items:flex-end;gap:6px;height:220px;padding:0 8px}
+.chart-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.chart-stack{display:flex;flex-direction:column;width:100%;gap:1px}
+.chart-bar{border-radius:3px 3px 0 0;min-height:0;transition:height .4s ease}
+.chart-label{font-size:11px;color:#666;margin-top:4px}
+.chart-val{font-size:10px;font-weight:700;color:#ccc}
+.chart-legend{display:flex;gap:16px;margin-top:12px;justify-content:center}
+.chart-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:#aaa}
+.chart-legend-dot{width:10px;height:10px;border-radius:3px}
+.chart-pair{display:flex;gap:3px;width:100%;justify-content:center}
+.chart-pair-bar{flex:1;border-radius:4px 4px 0 0;transition:height .4s ease}
+
+/* Week cards */
+.week-card{display:flex;align-items:center;gap:14px;padding:12px 16px;cursor:pointer;transition:border-color .2s}
+.week-card:hover{border-color:#8b5cf644!important}
+.week-badge{background:#8b5cf618;border-radius:8px;width:46px;height:46px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.week-badge span{font-size:17px;font-weight:800;color:#8b5cf6}
+
+/* Live card */
+.live-header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.live-dot{width:8px;height:8px;border-radius:50%}
+.live-label{font-size:15px;font-weight:800}
+.live-tag{font-size:10px;padding:2px 8px;border-radius:6px;font-weight:600}
+.live-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;text-align:center}
+.live-stat-label{font-size:10px;color:#666;margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px}
+.live-stat-val{font-size:18px;font-weight:800;margin:0}
+.grupo-card{border-radius:8px;padding:10px 12px}
+.grupo-card.ativo{background:#22c55e08;border:1px solid #22c55e25}
+.grupo-card.passivo{background:#0a0a18;border:1px solid #1a1a28}
+.grupo-name{font-size:12px;font-weight:700;margin-bottom:6px}
+.grupo-ativo-tag{font-size:8px;color:#22c55e;background:#22c55e20;padding:1px 5px;border-radius:4px;font-weight:700;margin-left:6px}
+.grupo-detail{font-size:11px;color:#bbb;line-height:1.9}
+
+/* Config */
+.cfg-input{flex:1;background:#0d0d1a;border:1px solid #333;border-radius:8px;padding:10px 14px;color:#fff;font-size:13px;outline:none;font-family:inherit}
+.cfg-input:focus{border-color:#22c55e}
+.cfg-btn{background:#22c55e;color:#000;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700}
+.cfg-btn:disabled{opacity:.4;cursor:default}
+
+.summary-bar{display:flex;gap:24px;flex-wrap:wrap;padding:14px 20px}
+.summary-item p:first-child{font-size:10px;color:#666;margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px}
+.summary-item p:last-child{font-size:16px;font-weight:800;margin:0}
+
+@media(max-width:768px){
+  .g6{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .live-stats{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div id="root" class="wrap"></div>
+<script>
+// ── DATA ──────────────────────────────────────────────
+const MAX_GP=8;
+
+function parseCSV(t){
+  const ls=t.trim().split("\n");if(ls.length<2)return[];
+  const hs=ls[0].split(",").map(h=>h.replace(/"/g,"").trim());
+  return ls.slice(1).map(l=>{
+    const vs=[];let c="",q=false;
+    for(const ch of l){if(ch==='"'){q=!q;continue}if(ch===","&&!q){vs.push(c.trim());c="";continue}c+=ch}
+    vs.push(c.trim());const o={};hs.forEach((h,i)=>{o[h]=vs[i]||""});return o;
+  });
+}
+function nm(v){const x=parseFloat(String(v).replace(",","."));return isNaN(x)?0:x}
+function fmt(v){return v.toLocaleString("pt-BR")}
+function fmtR(v){return"R$ "+v.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function pct(v){return v.toFixed(1)+"%"}
+
+function parseLiveRow(row){
+  const semana=nm(row["Semana"]),tipo=(row["Tipo"]||"").trim().toUpperCase(),label=(row["Label"]||"").trim();
+  if(!semana||!tipo||!label)return null;
+  const ga=(row["Grupo Ativo"]||"").trim().toUpperCase(),grupos=[];
+  for(let g=1;g<=MAX_GP;g++){
+    const ld=nm(row["Leads GP"+g]),cl=nm(row["Cliques GP"+g]),ct=nm(row["CTR GP"+g]);
+    if(ld>0||cl>0)grupos.push({nome:"GP"+g,leads:ld,cliques:cl,ctr:ct,ativo:"GP"+g===ga});
+  }
+  return{semana,tipo,label,data:(row["Data"]||"").trim(),cliquesTotal:nm(row["Cliques Total"]),pico:nm(row["Pico"]),vendas:nm(row["Vendas"]),grupos};
+}
+
+function calcStats(gs){
+  const at=gs.filter(g=>g.ativo),pa=gs.filter(g=>!g.ativo);
+  const ac=at.reduce((s,g)=>s+g.cliques,0),pc=pa.reduce((s,g)=>s+g.cliques,0);
+  const al=at.reduce((s,g)=>s+g.leads,0),pl=pa.reduce((s,g)=>s+g.leads,0);
+  return{ac,pc,aCTR:al>0?+((ac/al)*100).toFixed(1):0,pCTR:pl>0?+((pc/pl)*100).toFixed(1):0,ga:at.length>0?at[0].nome:"-"};
+}
+
+const defLivRaw=[
+  {Semana:"1",Tipo:"LVP",Label:"LVP",Data:"27/01","Cliques Total":"203",Pico:"261",Vendas:"0","Grupo Ativo":"GP1","Leads GP1":"274","Cliques GP1":"203","CTR GP1":"74.09"},
+  {Semana:"2",Tipo:"LVP",Label:"LVP",Data:"03/02","Cliques Total":"648",Pico:"249",Vendas:"0","Grupo Ativo":"GP2","Leads GP1":"226","Cliques GP1":"98","CTR GP1":"43.36","Leads GP2":"460","Cliques GP2":"357","CTR GP2":"77.61"},
+  {Semana:"2",Tipo:"LVG",Label:"LVG",Data:"04/02","Cliques Total":"287",Pico:"187",Vendas:"0","Grupo Ativo":"GP2","Leads GP1":"218","Cliques GP1":"37","CTR GP1":"16.97","Leads GP2":"617","Cliques GP2":"154","CTR GP2":"24.96"},
+  {Semana:"3",Tipo:"LVP",Label:"LVP 1",Data:"10/02","Cliques Total":"595",Pico:"149",Vendas:"0","Grupo Ativo":"GP3","Leads GP2":"617","Cliques GP2":"100","CTR GP2":"16.21","Leads GP3":"588","Cliques GP3":"376","CTR GP3":"63.95"},
+  {Semana:"3",Tipo:"LVP",Label:"LVP 2",Data:"11/02","Cliques Total":"341",Pico:"135",Vendas:"0","Grupo Ativo":"GP3","Leads GP2":"547","Cliques GP2":"50","CTR GP2":"9.14","Leads GP3":"535","Cliques GP3":"190","CTR GP3":"35.51"},
+  {Semana:"4",Tipo:"LVP",Label:"LVP",Data:"18/02","Cliques Total":"779",Pico:"273",Vendas:"0","Grupo Ativo":"GP4","Leads GP2":"501","Cliques GP2":"64","CTR GP2":"12.77","Leads GP3":"553","Cliques GP3":"77","CTR GP3":"13.92","Leads GP4":"693","Cliques GP4":"507","CTR GP4":"73.16"},
+  {Semana:"4",Tipo:"LVG",Label:"LVG",Data:"19/02","Cliques Total":"304",Pico:"167",Vendas:"0","Grupo Ativo":"GP4","Leads GP2":"488","Cliques GP2":"34","CTR GP2":"6.97","Leads GP3":"568","Cliques GP3":"61","CTR GP3":"10.74","Leads GP4":"589","Cliques GP4":"119","CTR GP4":"20.20"},
+];
+
+// ── STATE ─────────────────────────────────────────────
+let state={
+  selWeek:null,showCfg:false,loading:false,src:"local",err:null,lastUp:null,
+  sheetId:localStorage.getItem("rugido_sid")||"",
+  inputId:localStorage.getItem("rugido_sid")||"",
+  semanalData:[1,2,3,4].map(i=>({semana:i,investimento:0,leadsAds:0,leadsEntrada:0,leadsSaida:0,vendas:0})),
+  livesData:defLivRaw.map(parseLiveRow).filter(Boolean),
+};
+
+function setState(patch){Object.assign(state,patch);render()}
+
+// ── FETCH ─────────────────────────────────────────────
+async function fetchSheet(id){
+  if(!id)return;setState({loading:true,err:null});
+  try{
+    const base="https://docs.google.com/spreadsheets/d/"+id+"/gviz/tq?tqx=out:csv";
+    const[sR,lR]=await Promise.all([fetch(base+"&sheet=Semanal").then(r=>r.text()),fetch(base+"&sheet=Lives+e+Grupos").then(r=>r.text())]);
+    const sem=parseCSV(sR).map(r=>({semana:nm(r["Semana"]),investimento:nm(r["Investimento (R$)"]),leadsAds:nm(r["Leads Ads"]),leadsEntrada:nm(r["Leads Entrada"]),leadsSaida:nm(r["Leads Saida"]||r["Leads Saída"]),vendas:nm(r["Vendas Total"])})).filter(r=>r.semana>0);
+    const ll=lR.trim().split("\n");const ld=[ll[0],...ll.slice(2)].join("\n");
+    const lp=parseCSV(ld).map(parseLiveRow).filter(Boolean);
+    localStorage.setItem("rugido_sid",id);
+    setState({semanalData:sem,livesData:lp,src:"sheets",sheetId:id,loading:false,lastUp:new Date().toLocaleTimeString("pt-BR")});
+  }catch(e){setState({err:"Erro ao buscar. Verifique se a planilha esta compartilhada.",loading:false})}
+}
+
+// ── COMPUTE ───────────────────────────────────────────
+function compute(){
+  const{semanalData:sd,livesData:ld}=state;
+  const activeSemanas=[...new Set(ld.map(l=>l.semana))].sort((a,b)=>a-b);
+  const sm={};sd.forEach(s=>{sm[s.semana]=s});
+  activeSemanas.forEach(s=>{if(!sm[s])sm[s]={semana:s,investimento:0,leadsAds:0,leadsEntrada:0,leadsSaida:0,vendas:0}});
+
+  const weeks=activeSemanas.map(s=>{
+    const wl=ld.filter(l=>l.semana===s),allG=wl.flatMap(l=>l.grupos),st=calcStats(allG);
+    const tc=wl.reduce((a,l)=>a+l.cliquesTotal,0),tv=wl.reduce((a,l)=>a+l.vendas,0),m=sm[s]||{};
+    const cpl=m.leadsAds>0?m.investimento/m.leadsAds:0;
+    const txE=m.leadsAds>0?(m.leadsEntrada/m.leadsAds)*100:0;
+    const txS=m.leadsEntrada>0?(m.leadsSaida/m.leadsEntrada)*100:0;
+    return{sn:s,...st,tc,pico:wl.length>0?Math.max(...wl.map(l=>l.pico)):0,inv:m.investimento||0,la:m.leadsAds||0,cpl,txE:+txE.toFixed(1),txS:+txS.toFixed(1),vt:tv+(m.vendas||0),lives:wl.map(l=>l.label).join(" + "),evs:wl,m};
+  });
+
+  const ti=weeks.reduce((s,w)=>s+w.inv,0),tla=weeks.reduce((s,w)=>s+w.la,0);
+  const tle=Object.values(sm).reduce((s,w)=>s+(w.leadsEntrada||0),0);
+  const tls=Object.values(sm).reduce((s,w)=>s+(w.leadsSaida||0),0);
+  const tv=weeks.reduce((s,w)=>s+w.vt,0);
+  const oK={inv:ti,la:tla,cpl:tla>0?ti/tla:0,txE:tla>0?(tle/tla)*100:0,txS:tle>0?(tls/tle)*100:0,v:tv};
+
+  return{activeSemanas,weeks,oK,sm};
+}
+
+// ── RENDER HELPERS ────────────────────────────────────
+function h(tag,attrs,children){
+  const el=document.createElement(tag);
+  if(attrs)Object.entries(attrs).forEach(([k,v])=>{
+    if(k==="style"&&typeof v==="object")Object.assign(el.style,v);
+    else if(k.startsWith("on"))el.addEventListener(k.slice(2).toLowerCase(),v);
+    else if(k==="className")el.className=v;
+    else if(k==="innerHTML")el.innerHTML=v;
+    else el.setAttribute(k,v);
+  });
+  if(children){
+    if(typeof children==="string")el.textContent=children;
+    else if(Array.isArray(children))children.forEach(c=>{if(c)el.appendChild(typeof c==="string"?document.createTextNode(c):c)});
+    else el.appendChild(children);
+  }
+  return el;
+}
+
+function kpiCard(label,value,color,sub){
+  const card=h("div",{className:"card"});
+  card.appendChild(h("div",{className:"card-bar",style:{background:color}}));
+  card.appendChild(h("p",{className:"kpi-label"},label));
+  card.appendChild(h("p",{className:"kpi-val",style:{color}},value));
+  if(sub)card.appendChild(h("p",{className:"kpi-sub"},sub));
+  return card;
+}
+
+function barChart(data,maxVal,getAtivo,getPassivo,getLabel){
+  const container=h("div",{className:"card chart-container"});
+  const row=h("div",{className:"chart-row"});
+  const mx=maxVal||1;
+  data.forEach(d=>{
+    const col=h("div",{className:"chart-col"});
+    const av=getAtivo(d),pv=getPassivo(d),total=av+pv;
+    col.appendChild(h("span",{className:"chart-val"},fmt(total)));
+    const stack=h("div",{className:"chart-stack",style:{width:"100%"}});
+    if(pv>0)stack.appendChild(h("div",{className:"chart-bar",style:{background:"#f59e0b",height:Math.max(2,(pv/mx)*180)+"px"}}));
+    if(av>0)stack.appendChild(h("div",{className:"chart-bar",style:{background:"#22c55e",height:Math.max(2,(av/mx)*180)+"px"}}));
+    col.appendChild(stack);
+    col.appendChild(h("span",{className:"chart-label"},getLabel(d)));
+    row.appendChild(col);
+  });
+  container.appendChild(row);
+  const legend=h("div",{className:"chart-legend"});
+  [{c:"#22c55e",l:"Ativo"},{c:"#f59e0b",l:"Passados"},{c:"#888",l:"Total (topo)"}].forEach(({c,l})=>{
+    const item=h("div",{className:"chart-legend-item"});
+    item.appendChild(h("div",{className:"chart-legend-dot",style:{background:c}}));
+    item.appendChild(h("span",null,l));
+    legend.appendChild(item);
+  });
+  container.appendChild(legend);
+  return container;
+}
+
+function ctrChart(data){
+  const mx=Math.max(...data.map(d=>Math.max(d.aCTR,d.pCTR)),1);
+  const container=h("div",{className:"card chart-container"});
+  const row=h("div",{className:"chart-row"});
+  data.forEach(d=>{
+    const col=h("div",{className:"chart-col"});
+    const pair=h("div",{className:"chart-pair"});
+    pair.appendChild(h("div",{className:"chart-pair-bar",style:{background:"#22c55e",height:Math.max(2,(d.aCTR/mx)*180)+"px"}}));
+    pair.appendChild(h("div",{className:"chart-pair-bar",style:{background:"#f59e0b",height:Math.max(2,(d.pCTR/mx)*180)+"px"}}));
+    col.appendChild(h("span",{className:"chart-val"},pct(d.aCTR)+" / "+pct(d.pCTR)));
+    col.appendChild(pair);
+    col.appendChild(h("span",{className:"chart-label"},"S"+d.sn));
+    row.appendChild(col);
+  });
+  container.appendChild(row);
+  const legend=h("div",{className:"chart-legend"});
+  [{c:"#22c55e",l:"CTR Ativo"},{c:"#f59e0b",l:"CTR Passados"}].forEach(({c,l})=>{
+    const item=h("div",{className:"chart-legend-item"});
+    item.appendChild(h("div",{className:"chart-legend-dot",style:{background:c}}));
+    item.appendChild(h("span",null,l));
+    legend.appendChild(item);
+  });
+  container.appendChild(legend);
+  return container;
+}
+
+function liveCard(ev){
+  const tc=ev.tipo==="LVP"?"#3b82f6":"#f59e0b",tl=ev.tipo==="LVP"?"Prospecção":"Conteúdo";
+  const st=calcStats(ev.grupos);
+  const card=h("div",{className:"card fi",style:{padding:"0"}});
+
+  const header=h("div",{className:"live-header",style:{background:tc+"10",borderBottom:"1px solid "+tc+"20"}});
+  const left=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
+  left.appendChild(h("div",{className:"live-dot",style:{background:tc}}));
+  left.appendChild(h("span",{className:"live-label",style:{color:tc}},ev.label));
+  left.appendChild(h("span",{className:"live-tag",style:{color:tc,background:tc+"18"}},tl));
+  header.appendChild(left);
+  header.appendChild(h("span",{style:{fontSize:"12px",color:"#888"}},ev.data));
+  card.appendChild(header);
+
+  const body=h("div",{style:{padding:"16px"}});
+  const stats=h("div",{className:"live-stats"});
+  [{l:"Total Cliques",v:fmt(ev.cliquesTotal),c:"#fff"},{l:"Pico",v:fmt(ev.pico),c:"#8b5cf6"},{l:"CTR Ativo",v:pct(st.aCTR),c:"#22c55e"},{l:"Vendas",v:fmt(ev.vendas),c:"#ec4899"}].forEach(s=>{
+    const d=h("div");
+    d.appendChild(h("p",{className:"live-stat-label"},s.l));
+    d.appendChild(h("p",{className:"live-stat-val",style:{color:s.c}},s.v));
+    stats.appendChild(d);
+  });
+  body.appendChild(stats);
+
+  if(ev.grupos.length>0){
+    body.appendChild(h("p",{style:{fontSize:"11px",color:"#555",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px",fontWeight:"600"}},"Grupos"));
+    const gg=h("div",{className:"grid",style:{gridTemplateColumns:"repeat("+Math.min(ev.grupos.length,5)+",1fr)"}});
+    ev.grupos.forEach(g=>{
+      const gc=h("div",{className:"grupo-card "+(g.ativo?"ativo":"passivo")});
+      const nameRow=h("div",{style:{display:"flex",alignItems:"center",marginBottom:"6px"}});
+      nameRow.appendChild(h("span",{className:"grupo-name",style:{color:g.ativo?"#22c55e":"#777"}},g.nome));
+      if(g.ativo)nameRow.appendChild(h("span",{className:"grupo-ativo-tag"},"ATIVO"));
+      gc.appendChild(nameRow);
+      const det=h("div",{className:"grupo-detail"});
+      det.appendChild(h("div",{innerHTML:"Leads: <strong style='color:#ddd'>"+g.leads+"</strong>"}));
+      det.appendChild(h("div",{innerHTML:"Cliques: <strong style='color:#ddd'>"+g.cliques+"</strong>"}));
+      const ctrColor=g.ativo?"#22c55e":g.ctr>20?"#f59e0b":"#ef4444";
+      det.appendChild(h("div",{innerHTML:"CTR: <strong style='color:"+ctrColor+"'>"+g.ctr+"%</strong>"}));
+      gc.appendChild(det);
+      gg.appendChild(gc);
+    });
+    body.appendChild(gg);
+  }
+  card.appendChild(body);
+  return card;
+}
+
+// ── MAIN RENDER ───────────────────────────────────────
+function render(){
+  const root=document.getElementById("root");
+  root.innerHTML="";
+  const{activeSemanas,weeks,oK,sm}=compute();
+  const{selWeek,showCfg,loading,src,err,sheetId,inputId,lastUp}=state;
+
+  // Header
+  const hdr=h("div",{style:{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:"20px"}});
+  const hdrL=h("div");
+  const brand=h("div",{style:{display:"flex",alignItems:"center",gap:"10px",marginBottom:"4px"}});
+  brand.appendChild(h("div",{style:{width:"10px",height:"10px",borderRadius:"50%",background:"#22c55e",boxShadow:"0 0 8px #22c55e88"}}));
+  brand.appendChild(h("span",{style:{fontSize:"11px",letterSpacing:"2px",textTransform:"uppercase",color:"#22c55e",fontWeight:"600"}},"Grupo Rugido"));
+  hdrL.appendChild(brand);
+  hdrL.appendChild(h("h1",{style:{fontSize:"28px",fontWeight:"800",color:"#fff",margin:"4px 0 6px",letterSpacing:"-0.5px"}},"Dashboard Lives Semanais"));
+  let statusText=src==="sheets"?"🟢 Conectado ao Google Sheets":"📋 Dados locais (preview)";
+  if(loading)statusText+=" · Carregando...";
+  if(lastUp&&!loading)statusText+=" · Atualizado "+lastUp;
+  hdrL.appendChild(h("p",{style:{fontSize:"13px",color:"#888"}},statusText));
+  hdr.appendChild(hdrL);
+
+  const hdrR=h("div",{style:{display:"flex",gap:"6px",flexShrink:"0"}});
+  if(sheetId){
+    const refBtn=h("button",{style:{background:"#3b82f620",color:"#3b82f6",border:"1px solid #3b82f644",borderRadius:"8px",padding:"8px 12px",fontSize:"12px",fontWeight:"600"},onClick:()=>fetchSheet(sheetId)},"🔄");
+    hdrR.appendChild(refBtn);
+  }
+  hdrR.appendChild(h("button",{style:{background:"#151528",border:"1px solid #222",color:"#888",padding:"8px 14px",borderRadius:"8px",fontSize:"12px",fontWeight:"600"},onClick:()=>setState({showCfg:!showCfg})},"⚙️ Conectar"));
+  hdr.appendChild(hdrR);
+  root.appendChild(hdr);
+
+  // Config
+  if(showCfg){
+    const cfg=h("div",{className:"card fi",style:{marginBottom:"20px",padding:"20px"}});
+    cfg.appendChild(h("p",{style:{fontSize:"14px",fontWeight:"700",color:"#fff",marginBottom:"12px"}},"Conectar Google Sheets"));
+    cfg.appendChild(h("p",{style:{fontSize:"12px",color:"#888",marginBottom:"12px",lineHeight:"1.7"},innerHTML:"1. Copie a planilha pro Google Sheets<br>2. Compartilhe como \"Qualquer pessoa com o link\"<br>3. Da URL, copie o ID (entre <strong style='color:#22c55e'>/d/</strong> e <strong style='color:#22c55e'>/edit</strong>)<br>4. Cole abaixo e clique Conectar"}));
+    const row=h("div",{style:{display:"flex",gap:"8px"}});
+    const inp=h("input",{className:"cfg-input",placeholder:"Cole o ID da planilha aqui",value:inputId});
+    inp.addEventListener("input",e=>{state.inputId=e.target.value});
+    row.appendChild(inp);
+    row.appendChild(h("button",{className:"cfg-btn",onClick:()=>fetchSheet(state.inputId)},loading?"...":"Conectar"));
+    cfg.appendChild(row);
+    if(err)cfg.appendChild(h("p",{style:{fontSize:"12px",color:"#ef4444",marginTop:"8px"}},err));
+    cfg.appendChild(h("p",{style:{fontSize:"11px",color:"#555",marginTop:"10px"},innerHTML:"Ex: https://docs.google.com/spreadsheets/d/<strong style='color:#22c55e'>1AbCdEf...</strong>/edit"}));
+    root.appendChild(cfg);
+  }
+
+  // Nav
+  const nav=h("div",{style:{display:"flex",gap:"6px",marginBottom:"20px",flexWrap:"wrap"}});
+  const ovBtn=h("button",{className:"nav-btn overview "+(selWeek===null?"active":"inactive"),onClick:()=>setState({selWeek:null})},"📊 Visão Geral");
+  nav.appendChild(ovBtn);
+  activeSemanas.forEach(s=>{
+    nav.appendChild(h("button",{className:"nav-btn "+(selWeek===s?"active":"inactive"),onClick:()=>setState({selWeek:s})},"S"+s));
+  });
+  root.appendChild(nav);
+
+  // ═══ OVERVIEW ═══
+  if(selWeek===null){
+    const ov=h("div",{className:"fi"});
+
+    // KPIs
+    const kpis=h("div",{className:"grid g6",style:{marginBottom:"24px"}});
+    kpis.appendChild(kpiCard("Investimento",fmtR(oK.inv),"#ef4444","Total tráfego"));
+    kpis.appendChild(kpiCard("Leads Ads",fmt(oK.la),"#3b82f6","Captados"));
+    kpis.appendChild(kpiCard("CPL",oK.la>0?fmtR(oK.cpl):"–","#f97316"));
+    kpis.appendChild(kpiCard("Taxa Entrada",oK.la>0?pct(oK.txE):"–","#22c55e"));
+    kpis.appendChild(kpiCard("Taxa Saída",oK.la>0?pct(oK.txS):"–","#f59e0b"));
+    kpis.appendChild(kpiCard("Vendas",fmt(oK.v),"#ec4899","Ingressos"));
+    ov.appendChild(kpis);
+
+    // Cliques chart
+    ov.appendChild(h("h2",{style:{fontSize:"15px",fontWeight:"700",color:"#fff",marginBottom:"4px"}},"Cliques por Semana"));
+    ov.appendChild(h("p",{style:{fontSize:"12px",color:"#666",marginBottom:"14px"}},"Verde = ativo · Amarelo = passados"));
+    const maxC=Math.max(...weeks.map(w=>w.ac+w.pc),1);
+    ov.appendChild(barChart(weeks,maxC,d=>d.ac,d=>d.pc,d=>"S"+d.sn));
+
+    // CTR chart
+    ov.appendChild(h("h2",{style:{fontSize:"15px",fontWeight:"700",color:"#fff",marginTop:"24px",marginBottom:"4px"}},"CTR: Ativo vs Passados"));
+    ov.appendChild(h("p",{style:{fontSize:"12px",color:"#666",marginBottom:"14px"}},"Comparativo semana a semana"));
+    ov.appendChild(ctrChart(weeks));
+
+    // Week cards
+    ov.appendChild(h("h2",{style:{fontSize:"15px",fontWeight:"700",color:"#fff",marginTop:"24px",marginBottom:"12px"}},"Semanas"));
+    const wList=h("div",{style:{display:"grid",gap:"8px"}});
+    weeks.forEach(w=>{
+      const wc=h("div",{className:"card week-card",onClick:()=>setState({selWeek:w.sn})});
+      const badge=h("div",{className:"week-badge"});
+      badge.appendChild(h("span",null,"S"+w.sn));
+      wc.appendChild(badge);
+      const info=h("div",{style:{flex:"1"}});
+      const top=h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"3px",flexWrap:"wrap"}});
+      top.appendChild(h("span",{style:{fontSize:"13px",fontWeight:"700",color:"#fff"}},w.lives));
+      top.appendChild(h("span",{style:{fontSize:"10px",color:"#22c55e",background:"#22c55e18",padding:"1px 7px",borderRadius:"8px"}},w.ga+" ativo"));
+      info.appendChild(top);
+      const bot=h("div",{style:{display:"flex",gap:"12px",fontSize:"11px",flexWrap:"wrap",color:"#aaa"},innerHTML:
+        "Invest: <strong style='color:#ef4444'>"+fmtR(w.inv)+"</strong> "+
+        "CPL: <strong style='color:#f97316'>"+(w.la>0?fmtR(w.cpl):"–")+"</strong> "+
+        "Entrada: <strong style='color:#22c55e'>"+(w.la>0?pct(w.txE):"–")+"</strong> "+
+        "Saída: <strong style='color:#f59e0b'>"+(w.la>0?pct(w.txS):"–")+"</strong> "+
+        "Vendas: <strong style='color:#ec4899'>"+fmt(w.vt)+"</strong>"
+      });
+      info.appendChild(bot);
+      wc.appendChild(info);
+      wc.appendChild(h("span",{style:{fontSize:"16px",color:"#444"}},"→"));
+      wList.appendChild(wc);
+    });
+    ov.appendChild(wList);
+    root.appendChild(ov);
+  }
+
+  // ═══ WEEK DETAIL ═══
+  if(selWeek!==null){
+    const w=weeks.find(w=>w.sn===selWeek);
+    if(!w)return;
+    const det=h("div",{className:"fi"});
+
+    const topRow=h("div",{style:{display:"flex",alignItems:"center",gap:"12px",marginBottom:"20px"}});
+    topRow.appendChild(h("button",{style:{background:"#151528",border:"1px solid #222",color:"#888",padding:"6px 12px",borderRadius:"6px",fontSize:"12px"},onClick:()=>setState({selWeek:null})},"← Voltar"));
+    topRow.appendChild(h("h2",{style:{fontSize:"22px",fontWeight:"800",color:"#fff"}},"Semana "+w.sn));
+    topRow.appendChild(h("span",{style:{fontSize:"12px",color:"#666"}},w.evs.length+" live"+(w.evs.length>1?"s":"")));
+    det.appendChild(topRow);
+
+    // KPIs row 1
+    const k1=h("div",{className:"grid g4",style:{marginBottom:"10px"}});
+    k1.appendChild(kpiCard("Investimento",fmtR(w.m.investimento||0),"#ef4444"));
+    k1.appendChild(kpiCard("Leads Ads",fmt(w.m.leadsAds||0),"#3b82f6","Captados"));
+    k1.appendChild(kpiCard("CPL",(w.m.leadsAds||0)>0?fmtR(w.cpl):"–","#f97316"));
+    k1.appendChild(kpiCard("Vendas Total",fmt(w.vt),"#ec4899"));
+    det.appendChild(k1);
+
+    // KPIs row 2
+    const k2=h("div",{className:"grid g4",style:{marginBottom:"24px"}});
+    k2.appendChild(kpiCard("Leads Entrada",fmt(w.m.leadsEntrada||0),"#22c55e","Entraram no grupo"));
+    k2.appendChild(kpiCard("Leads Saída",fmt(w.m.leadsSaida||0),"#f59e0b","Saíram do grupo"));
+    k2.appendChild(kpiCard("Taxa Entrada",(w.m.leadsAds||0)>0?pct(w.txE):"–","#22c55e"));
+    k2.appendChild(kpiCard("Taxa Saída",(w.m.leadsEntrada||0)>0?pct(w.txS):"–","#f59e0b"));
+    det.appendChild(k2);
+
+    // Summary bar
+    const bar=h("div",{className:"card summary-bar",style:{marginBottom:"24px"}});
+    [{l:"Total Cliques",v:fmt(w.tc),c:"#fff"},{l:"Pico",v:fmt(w.pico),c:"#8b5cf6"},{l:"CTR Ativo",v:pct(w.aCTR),c:"#22c55e"},{l:"CTR Passados",v:w.pCTR>0?pct(w.pCTR):"–",c:"#f59e0b"},{l:"Grupo Ativo",v:w.ga,c:"#8b5cf6"}].forEach(s=>{
+      const item=h("div",{className:"summary-item"});
+      item.appendChild(h("p",null,s.l));
+      item.appendChild(h("p",{style:{color:s.c}},s.v));
+      bar.appendChild(item);
+    });
+    det.appendChild(bar);
+
+    // Lives
+    det.appendChild(h("h3",{style:{fontSize:"14px",fontWeight:"700",color:"#fff",marginBottom:"12px"}},"Lives Individuais"));
+    const lList=h("div",{style:{display:"grid",gap:"14px"}});
+    w.evs.forEach(ev=>lList.appendChild(liveCard(ev)));
+    det.appendChild(lList);
+    root.appendChild(det);
+  }
+
+  // Footer
+  root.appendChild(h("div",{style:{marginTop:"40px",paddingTop:"16px",borderTop:"1px solid #1a1a28",textAlign:"center"}},
+    h("p",{style:{fontSize:"11px",color:"#444"}},"Dashboard Lives Semanais · Grupo Rugido · "+new Date().getFullYear())
+  ));
+}
+
+// Init
+render();
+if(state.sheetId)fetchSheet(state.sheetId);
+</script>
+</body>
+</html>
