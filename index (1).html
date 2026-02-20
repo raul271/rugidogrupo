@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Lives Semanais — Grupo Rugido</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans','Segoe UI',sans-serif;background:#0d0d1a;color:#e0e0e0;min-height:100vh}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#0d0d1a}
+::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+input:focus{border-color:#22c55e!important}
+button{transition:all .15s ease}
+button:hover{filter:brightness(1.1)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fi{animation:fadeIn .3s ease}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.ld{animation:pulse 1.5s infinite}
+canvas{max-height:300px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useMemo,useEffect,useCallback,useRef} = React;
+
+// CSV Parser
+function parseCSV(t){
+  const ls=t.trim().split("\n");
+  if(ls.length<2)return[];
+  const hs=ls[0].split(",").map(h=>h.replace(/"/g,"").trim());
+  return ls.slice(1).map(l=>{
+    const vs=[];let c="",q=false;
+    for(const ch of l){if(ch==='"'){q=!q;continue}if(ch===","&&!q){vs.push(c.trim());c="";continue}c+=ch}
+    vs.push(c.trim());
+    const o={};hs.forEach((h,i)=>{o[h]=vs[i]||""});return o;
+  });
+}
+
+function nm(v){const x=parseFloat(String(v).replace(",","."));return isNaN(x)?0:x}
+function fmt(v){return v.toLocaleString("pt-BR")}
+function fmtR(v){return"R$ "+v.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function pct(v){return v.toFixed(1)+"%"}
+const MAX_GP=8;
+
+function parseLiveRow(row){
+  const semana=nm(row["Semana"]),tipo=(row["Tipo"]||"").trim().toUpperCase(),label=(row["Label"]||"").trim();
+  if(!semana||!tipo||!label)return null;
+  const ga=(row["Grupo Ativo"]||"").trim().toUpperCase(),grupos=[];
+  for(let g=1;g<=MAX_GP;g++){
+    const ld=nm(row[`Leads GP${g}`]),cl=nm(row[`Cliques GP${g}`]),ct=nm(row[`CTR GP${g}`]);
+    if(ld>0||cl>0)grupos.push({nome:`GP${g}`,leads:ld,cliques:cl,ctr:ct,ativo:`GP${g}`===ga});
+  }
+  return{semana,tipo,label,data:(row["Data"]||"").trim(),cliquesTotal:nm(row["Cliques Total"]),pico:nm(row["Pico"]),vendas:nm(row["Vendas"]),grupos};
+}
+
+// Default data
+const defSem=[1,2,3,4].map(i=>({semana:i,investimento:0,leadsAds:0,leadsEntrada:0,leadsSaida:0,vendas:0}));
+const defLivRaw=[
+  {Semana:"1",Tipo:"LVP",Label:"LVP",Data:"27/01","Cliques Total":"203",Pico:"261",Vendas:"0","Grupo Ativo":"GP1","Leads GP1":"274","Cliques GP1":"203","CTR GP1":"74.09"},
+  {Semana:"2",Tipo:"LVP",Label:"LVP",Data:"03/02","Cliques Total":"648",Pico:"249",Vendas:"0","Grupo Ativo":"GP2","Leads GP1":"226","Cliques GP1":"98","CTR GP1":"43.36","Leads GP2":"460","Cliques GP2":"357","CTR GP2":"77.61"},
+  {Semana:"2",Tipo:"LVG",Label:"LVG",Data:"04/02","Cliques Total":"287",Pico:"187",Vendas:"0","Grupo Ativo":"GP2","Leads GP1":"218","Cliques GP1":"37","CTR GP1":"16.97","Leads GP2":"617","Cliques GP2":"154","CTR GP2":"24.96"},
+  {Semana:"3",Tipo:"LVP",Label:"LVP 1",Data:"10/02","Cliques Total":"595",Pico:"149",Vendas:"0","Grupo Ativo":"GP3","Leads GP2":"617","Cliques GP2":"100","CTR GP2":"16.21","Leads GP3":"588","Cliques GP3":"376","CTR GP3":"63.95"},
+  {Semana:"3",Tipo:"LVP",Label:"LVP 2",Data:"11/02","Cliques Total":"341",Pico:"135",Vendas:"0","Grupo Ativo":"GP3","Leads GP2":"547","Cliques GP2":"50","CTR GP2":"9.14","Leads GP3":"535","Cliques GP3":"190","CTR GP3":"35.51"},
+  {Semana:"4",Tipo:"LVP",Label:"LVP",Data:"18/02","Cliques Total":"779",Pico:"273",Vendas:"0","Grupo Ativo":"GP4","Leads GP2":"501","Cliques GP2":"64","CTR GP2":"12.77","Leads GP3":"553","Cliques GP3":"77","CTR GP3":"13.92","Leads GP4":"693","Cliques GP4":"507","CTR GP4":"73.16"},
+  {Semana:"4",Tipo:"LVG",Label:"LVG",Data:"19/02","Cliques Total":"304",Pico:"167",Vendas:"0","Grupo Ativo":"GP4","Leads GP2":"488","Cliques GP2":"34","CTR GP2":"6.97","Leads GP3":"568","Cliques GP3":"61","CTR GP3":"10.74","Leads GP4":"589","Cliques GP4":"119","CTR GP4":"20.20"},
+];
+
+function calcStats(gs){
+  const at=gs.filter(g=>g.ativo),pa=gs.filter(g=>!g.ativo);
+  const ac=at.reduce((s,g)=>s+g.cliques,0),pc=pa.reduce((s,g)=>s+g.cliques,0);
+  const al=at.reduce((s,g)=>s+g.leads,0),pl=pa.reduce((s,g)=>s+g.leads,0);
+  return{ativoCliques:ac,passivoCliques:pc,ativoCTR:al>0?+((ac/al)*100).toFixed(1):0,passivoCTR:pl>0?+((pc/pl)*100).toFixed(1):0,grupoAtivo:at.length>0?at[0].nome:"-"};
+}
+
+// Chart component using Chart.js
+function ChartCanvas({type,data,options,height}){
+  const ref=useRef(null),chartRef=useRef(null);
+  useEffect(()=>{
+    if(chartRef.current)chartRef.current.destroy();
+    const ctx=ref.current.getContext("2d");
+    chartRef.current=new Chart(ctx,{type,data,options:{...options,responsive:true,maintainAspectRatio:false,plugins:{...options?.plugins,legend:{labels:{color:"#aaa",font:{family:"DM Sans",size:11}}}},scales:{x:{ticks:{color:"#666",font:{family:"DM Sans",size:11}},grid:{color:"#222"}},y:{ticks:{color:"#666",font:{family:"DM Sans",size:11}},grid:{color:"#222"}},
+    ...(options?.scales||{})}}});
+    return()=>{if(chartRef.current)chartRef.current.destroy()};
+  },[JSON.stringify(data)]);
+  return <div style={{position:"relative",height:height||280}}><canvas ref={ref}/></div>;
+}
+
+function Dashboard(){
+  const[selWeek,setSelWeek]=useState(null);
+  const[sheetId,setSheetId]=useState("");
+  const[inputId,setInputId]=useState("");
+  const[showCfg,setShowCfg]=useState(false);
+  const[loading,setLoading]=useState(false);
+  const[src,setSrc]=useState("local");
+  const[err,setErr]=useState(null);
+  const[semanalData,setSemanalData]=useState(defSem);
+  const[livesData,setLivesData]=useState(()=>defLivRaw.map(parseLiveRow).filter(Boolean));
+  const[lastUp,setLastUp]=useState(null);
+
+  useEffect(()=>{try{const s=localStorage.getItem("rugido_sid");if(s){setSheetId(s);setInputId(s)}}catch(e){}},[]);
+
+  const fetchSheet=useCallback(async(id)=>{
+    if(!id)return;setLoading(true);setErr(null);
+    try{
+      const base=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`;
+      const[sR,lR]=await Promise.all([fetch(`${base}&sheet=Semanal`).then(r=>r.text()),fetch(`${base}&sheet=Lives+e+Grupos`).then(r=>r.text())]);
+      const sem=parseCSV(sR).map(r=>({semana:nm(r["Semana"]),investimento:nm(r["Investimento (R$)"]),leadsAds:nm(r["Leads Ads"]),leadsEntrada:nm(r["Leads Entrada"]),leadsSaida:nm(r["Leads Saida"]||r["Leads Saída"]),vendas:nm(r["Vendas Total"])})).filter(r=>r.semana>0);
+      const ll=lR.trim().split("\n");const ld=[ll[0],...ll.slice(2)].join("\n");
+      const lp=parseCSV(ld).map(parseLiveRow).filter(Boolean);
+      setSemanalData(sem);setLivesData(lp);setSrc("sheets");setSheetId(id);setLastUp(new Date().toLocaleTimeString("pt-BR"));
+      try{localStorage.setItem("rugido_sid",id)}catch(e){}
+    }catch(e){setErr("Erro ao buscar. Verifique se a planilha esta compartilhada como 'Qualquer pessoa com o link'.")}
+    setLoading(false);
+  },[]);
+
+  useEffect(()=>{try{const s=localStorage.getItem("rugido_sid");if(s)fetchSheet(s)}catch(e){}},[]);
+
+  const activeSemanas=useMemo(()=>[...new Set(livesData.map(l=>l.semana))].sort((a,b)=>a-b),[livesData]);
+  const semanalMap=useMemo(()=>{const m={};semanalData.forEach(s=>{m[s.semana]=s});activeSemanas.forEach(s=>{if(!m[s])m[s]={semana:s,investimento:0,leadsAds:0,leadsEntrada:0,leadsSaida:0,vendas:0}});return m},[semanalData,activeSemanas]);
+
+  const allWeekly=useMemo(()=>activeSemanas.map(s=>{
+    const wl=livesData.filter(l=>l.semana===s),allG=wl.flatMap(l=>l.grupos),st=calcStats(allG);
+    const tc=wl.reduce((a,l)=>a+l.cliquesTotal,0),tv=wl.reduce((a,l)=>a+l.vendas,0),m=semanalMap[s]||{};
+    const cpl=m.leadsAds>0?m.investimento/m.leadsAds:0,txE=m.leadsAds>0?(m.leadsEntrada/m.leadsAds)*100:0,txS=m.leadsEntrada>0?(m.leadsSaida/m.leadsEntrada)*100:0;
+    return{semana:`S${s}`,sn:s,lives:wl.map(l=>l.label).join(" + "),...st,tc,pico:wl.length>0?Math.max(...wl.map(l=>l.pico)):0,inv:m.investimento||0,la:m.leadsAds||0,cpl,txE:+txE.toFixed(1),txS:+txS.toFixed(1),vt:tv+(m.vendas||0)};
+  }),[activeSemanas,livesData,semanalMap]);
+
+  const oK=useMemo(()=>{
+    const ti=allWeekly.reduce((s,w)=>s+w.inv,0),tla=allWeekly.reduce((s,w)=>s+w.la,0);
+    const tle=Object.values(semanalMap).reduce((s,w)=>s+(w.leadsEntrada||0),0),tls=Object.values(semanalMap).reduce((s,w)=>s+(w.leadsSaida||0),0);
+    const tv=allWeekly.reduce((s,w)=>s+w.vt,0);
+    return{inv:ti,la:tla,cpl:tla>0?ti/tla:0,txE:tla>0?(tle/tla)*100:0,txS:tle>0?(tls/tle)*100:0,v:tv};
+  },[allWeekly,semanalMap]);
+
+  const wd=useMemo(()=>{
+    if(selWeek===null)return null;
+    const evs=livesData.filter(l=>l.semana===selWeek),m=semanalMap[selWeek]||{investimento:0,leadsAds:0,leadsEntrada:0,leadsSaida:0,vendas:0};
+    const allG=evs.flatMap(l=>l.grupos),st=calcStats(allG);
+    const tc=evs.reduce((a,l)=>a+l.cliquesTotal,0),tv=evs.reduce((a,l)=>a+l.vendas,0);
+    const cpl=m.leadsAds>0?m.investimento/m.leadsAds:0,txE=m.leadsAds>0?(m.leadsEntrada/m.leadsAds)*100:0,txS=m.leadsEntrada>0?(m.leadsSaida/m.leadsEntrada)*100:0;
+    return{s:selWeek,m,st,pm:evs.length>0?Math.max(...evs.map(l=>l.pico)):0,tc,tv,cpl,txE:+txE.toFixed(1),txS:+txS.toFixed(1),evs};
+  },[selWeek,livesData,semanalMap]);
+
+  // Chart data
+  const cliquesChartData=useMemo(()=>({
+    labels:allWeekly.map(w=>w.semana),
+    datasets:[
+      {label:"Cliques Ativo",data:allWeekly.map(w=>w.ativoCliques),backgroundColor:"#22c55e",borderRadius:4,stack:"a"},
+      {label:"Cliques Passados",data:allWeekly.map(w=>w.passivoCliques),backgroundColor:"#f59e0b",borderRadius:{topLeft:4,topRight:4},stack:"a"},
+      {label:"Total",data:allWeekly.map(w=>w.tc),type:"line",borderColor:"#fff",borderWidth:2,borderDash:[5,3],pointBackgroundColor:"#fff",pointRadius:4,fill:false}
+    ]
+  }),[allWeekly]);
+
+  const ctrChartData=useMemo(()=>({
+    labels:allWeekly.map(w=>w.semana),
+    datasets:[
+      {label:"CTR Ativo",data:allWeekly.map(w=>w.ativoCTR),backgroundColor:"#22c55e",borderRadius:6},
+      {label:"CTR Passados",data:allWeekly.map(w=>w.passivoCTR),backgroundColor:"#f59e0b",borderRadius:6},
+    ]
+  }),[allWeekly]);
+
+  const cs={background:"#151528",borderRadius:12,padding:"16px 14px",border:"1px solid #222",position:"relative",overflow:"hidden"};
+  const tb=c=>({position:"absolute",top:0,left:0,right:0,height:2,background:c});
+
+  const K=({l,v,c,sub})=>(
+    <div style={cs}><div style={tb(c)}/><p style={{fontSize:10,color:"#777",margin:"0 0 4px",textTransform:"uppercase",letterSpacing:.5}}>{l}</p><p style={{fontSize:20,fontWeight:800,color:c,margin:"0 0 1px"}}>{v}</p>{sub&&<p style={{fontSize:10,color:"#555",margin:0}}>{sub}</p>}</div>
+  );
+
+  const LC=({ev})=>{
+    const tc=ev.tipo==="LVP"?"#3b82f6":"#f59e0b",tl=ev.tipo==="LVP"?"Prospecção":"Conteúdo",st=calcStats(ev.grupos);
+    return(
+      <div className="fi" style={{...cs,padding:0}}>
+        <div style={{background:`${tc}10`,padding:"12px 16px",borderBottom:`1px solid ${tc}20`,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:tc}}/>
+            <span style={{fontSize:15,fontWeight:800,color:tc}}>{ev.label}</span>
+            <span style={{fontSize:10,color:tc,background:`${tc}18`,padding:"2px 8px",borderRadius:6,fontWeight:600}}>{tl}</span>
+          </div>
+          <span style={{fontSize:12,color:"#888"}}>{ev.data}</span>
+        </div>
+        <div style={{padding:16}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+            {[{l:"Total Cliques",v:fmt(ev.cliquesTotal),c:"#fff"},{l:"Pico",v:fmt(ev.pico),c:"#8b5cf6"},{l:"CTR Ativo",v:pct(st.ativoCTR),c:"#22c55e"},{l:"Vendas",v:fmt(ev.vendas),c:"#ec4899"}].map((s,i)=>(
+              <div key={i} style={{textAlign:"center"}}><p style={{fontSize:10,color:"#666",margin:"0 0 2px",textTransform:"uppercase",letterSpacing:.5}}>{s.l}</p><p style={{fontSize:18,fontWeight:800,color:s.c,margin:0}}>{s.v}</p></div>
+            ))}
+          </div>
+          {ev.grupos.length>0&&(<>
+            <p style={{fontSize:11,color:"#555",textTransform:"uppercase",letterSpacing:1,marginBottom:8,fontWeight:600}}>Grupos</p>
+            <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(ev.grupos.length,5)},1fr)`,gap:8}}>
+              {ev.grupos.map((g,i)=>(
+                <div key={i} style={{background:g.ativo?"#22c55e08":"#0a0a18",borderRadius:8,padding:"10px 12px",border:g.ativo?"1px solid #22c55e25":"1px solid #1a1a28"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                    <span style={{fontSize:12,fontWeight:700,color:g.ativo?"#22c55e":"#777"}}>{g.nome}</span>
+                    {g.ativo&&<span style={{fontSize:8,color:"#22c55e",background:"#22c55e20",padding:"1px 5px",borderRadius:4,fontWeight:700}}>ATIVO</span>}
+                  </div>
+                  <div style={{fontSize:11,color:"#bbb",lineHeight:1.9}}>
+                    <div>Leads: <strong style={{color:"#ddd"}}>{g.leads}</strong></div>
+                    <div>Cliques: <strong style={{color:"#ddd"}}>{g.cliques}</strong></div>
+                    <div>CTR: <strong style={{color:g.ativo?"#22c55e":g.ctr>20?"#f59e0b":"#ef4444"}}>{g.ctr}%</strong></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>)}
+        </div>
+      </div>
+    );
+  };
+
+  return(
+    <div style={{padding:"24px 20px",maxWidth:940,margin:"0 auto"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+            <div style={{width:10,height:10,borderRadius:"50%",background:"#22c55e",boxShadow:"0 0 8px #22c55e88"}}/>
+            <span style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#22c55e",fontWeight:600}}>Grupo Rugido</span>
+          </div>
+          <h1 style={{fontSize:28,fontWeight:800,color:"#fff",margin:"4px 0 6px",letterSpacing:-.5}}>Dashboard Lives Semanais</h1>
+          <p style={{fontSize:13,color:"#888",margin:0}}>
+            {src==="sheets"?"🟢 Conectado ao Google Sheets":"📋 Dados locais (preview)"}
+            {loading&&<span className="ld"> · Carregando...</span>}
+            {lastUp&&!loading&&<span> · Atualizado {lastUp}</span>}
+          </p>
+        </div>
+        <div style={{display:"flex",gap:6,flexShrink:0}}>
+          {sheetId&&<button onClick={()=>fetchSheet(sheetId)} style={{background:"#3b82f620",color:"#3b82f6",border:"1px solid #3b82f644",borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>🔄</button>}
+          <button onClick={()=>setShowCfg(!showCfg)} style={{background:"#151528",border:"1px solid #222",color:"#888",padding:"8px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>⚙️ Conectar</button>
+        </div>
+      </div>
+
+      {showCfg&&(
+        <div className="fi" style={{...cs,marginBottom:20,padding:20}}>
+          <p style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:12}}>Conectar Google Sheets</p>
+          <p style={{fontSize:12,color:"#888",marginBottom:12,lineHeight:1.7}}>
+            1. Copie a planilha pro Google Sheets<br/>
+            2. Compartilhe como "Qualquer pessoa com o link"<br/>
+            3. Da URL, copie o ID (entre <strong style={{color:"#22c55e"}}>/d/</strong> e <strong style={{color:"#22c55e"}}>/edit</strong>)<br/>
+            4. Cole abaixo e clique Conectar
+          </p>
+          <div style={{display:"flex",gap:8}}>
+            <input value={inputId} onChange={e=>setInputId(e.target.value)} placeholder="Cole o ID da planilha aqui"
+              style={{flex:1,background:"#0d0d1a",border:"1px solid #333",borderRadius:8,padding:"10px 14px",color:"#fff",fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+            <button onClick={()=>fetchSheet(inputId)} disabled={loading||!inputId}
+              style={{background:"#22c55e",color:"#000",border:"none",borderRadius:8,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:loading?"wait":"pointer",opacity:!inputId?.4:1}}>
+              {loading?"...":"Conectar"}
+            </button>
+          </div>
+          {err&&<p style={{fontSize:12,color:"#ef4444",marginTop:8}}>{err}</p>}
+          <p style={{fontSize:11,color:"#555",marginTop:10}}>Ex: https://docs.google.com/spreadsheets/d/<strong style={{color:"#22c55e"}}>1AbCdEf...</strong>/edit</p>
+        </div>
+      )}
+
+      {/* Nav */}
+      <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
+        <button onClick={()=>setSelWeek(null)} style={{background:selWeek===null?"#22c55e14":"#151528",color:selWeek===null?"#22c55e":"#888",border:selWeek===null?"1px solid #22c55e33":"1px solid #222",padding:"8px 18px",fontSize:13,fontWeight:700,cursor:"pointer",borderRadius:8}}>📊 Visão Geral</button>
+        {activeSemanas.map(s=>(
+          <button key={s} onClick={()=>setSelWeek(s)} style={{background:selWeek===s?"#8b5cf614":"#151528",color:selWeek===s?"#8b5cf6":"#888",border:selWeek===s?"1px solid #8b5cf633":"1px solid #222",padding:"8px 14px",fontSize:13,fontWeight:700,cursor:"pointer",borderRadius:8,minWidth:44}}>S{s}</button>
+        ))}
+      </div>
+
+      {/* OVERVIEW */}
+      {selWeek===null&&(
+        <div className="fi">
+          <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10,marginBottom:24}}>
+            <K l="Investimento" v={fmtR(oK.inv)} c="#ef4444" sub="Total tráfego"/>
+            <K l="Leads Ads" v={fmt(oK.la)} c="#3b82f6" sub="Captados"/>
+            <K l="CPL" v={oK.la>0?fmtR(oK.cpl):"–"} c="#f97316"/>
+            <K l="Taxa Entrada" v={oK.la>0?pct(oK.txE):"–"} c="#22c55e"/>
+            <K l="Taxa Saída" v={oK.la>0?pct(oK.txS):"–"} c="#f59e0b"/>
+            <K l="Vendas" v={fmt(oK.v)} c="#ec4899" sub="Ingressos"/>
+          </div>
+
+          <h2 style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:4}}>Cliques por Semana</h2>
+          <p style={{fontSize:12,color:"#666",marginBottom:14}}>Verde = ativo · Amarelo = passados · Linha = total</p>
+          <div style={{...cs,padding:"18px 14px 8px"}}>
+            <ChartCanvas type="bar" data={cliquesChartData} options={{plugins:{tooltip:{backgroundColor:"#1a1a2e",borderColor:"#333",borderWidth:1,titleFont:{family:"DM Sans"},bodyFont:{family:"DM Sans"}}},scales:{x:{stacked:true},y:{stacked:true}}}} height={280}/>
+          </div>
+
+          <h2 style={{fontSize:15,fontWeight:700,color:"#fff",marginTop:24,marginBottom:4}}>CTR: Ativo vs Passados</h2>
+          <p style={{fontSize:12,color:"#666",marginBottom:14}}>Comparativo semana a semana</p>
+          <div style={{...cs,padding:"18px 14px 8px"}}>
+            <ChartCanvas type="bar" data={ctrChartData} options={{plugins:{tooltip:{callbacks:{label:ctx=>ctx.dataset.label+": "+ctx.parsed.y.toFixed(1)+"%"},backgroundColor:"#1a1a2e",borderColor:"#333",borderWidth:1}},scales:{y:{ticks:{callback:v=>v+"%"}}}}} height={260}/>
+          </div>
+
+          <h2 style={{fontSize:15,fontWeight:700,color:"#fff",marginTop:24,marginBottom:12}}>Semanas</h2>
+          <div style={{display:"grid",gap:8}}>
+            {allWeekly.map(w=>(
+              <div key={w.sn} onClick={()=>setSelWeek(w.sn)}
+                style={{...cs,padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor="#8b5cf644"}
+                onMouseLeave={e=>e.currentTarget.style.borderColor="#222"}>
+                <div style={{background:"#8b5cf618",borderRadius:8,width:46,height:46,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <span style={{fontSize:17,fontWeight:800,color:"#8b5cf6"}}>S{w.sn}</span>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
+                    <span style={{fontSize:13,fontWeight:700,color:"#fff"}}>{w.lives}</span>
+                    <span style={{fontSize:10,color:"#22c55e",background:"#22c55e18",padding:"1px 7px",borderRadius:8}}>{w.grupoAtivo} ativo</span>
+                  </div>
+                  <div style={{display:"flex",gap:12,fontSize:11,flexWrap:"wrap",color:"#aaa"}}>
+                    <span>Invest: <strong style={{color:"#ef4444"}}>{fmtR(w.inv)}</strong></span>
+                    <span>CPL: <strong style={{color:"#f97316"}}>{w.la>0?fmtR(w.cpl):"–"}</strong></span>
+                    <span>Entrada: <strong style={{color:"#22c55e"}}>{w.la>0?pct(w.txE):"–"}</strong></span>
+                    <span>Saída: <strong style={{color:"#f59e0b"}}>{w.la>0?pct(w.txS):"–"}</strong></span>
+                    <span>Vendas: <strong style={{color:"#ec4899"}}>{fmt(w.vt)}</strong></span>
+                  </div>
+                </div>
+                <span style={{fontSize:16,color:"#444"}}>→</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* WEEK DETAIL */}
+      {selWeek!==null&&wd&&(
+        <div className="fi">
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+            <button onClick={()=>setSelWeek(null)} style={{background:"#151528",border:"1px solid #222",color:"#888",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:12}}>← Voltar</button>
+            <h2 style={{fontSize:22,fontWeight:800,color:"#fff",margin:0}}>Semana {wd.s}</h2>
+            <span style={{fontSize:12,color:"#666"}}>{wd.evs.length} live{wd.evs.length>1?"s":""}</span>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+            <K l="Investimento" v={fmtR(wd.m.investimento)} c="#ef4444"/>
+            <K l="Leads Ads" v={fmt(wd.m.leadsAds)} c="#3b82f6" sub="Captados"/>
+            <K l="CPL" v={wd.m.leadsAds>0?fmtR(wd.cpl):"–"} c="#f97316"/>
+            <K l="Vendas Total" v={fmt(wd.tv+(wd.m.vendas||0))} c="#ec4899"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:24}}>
+            <K l="Leads Entrada" v={fmt(wd.m.leadsEntrada)} c="#22c55e" sub="Entraram no grupo"/>
+            <K l="Leads Saída" v={fmt(wd.m.leadsSaida)} c="#f59e0b" sub="Saíram do grupo"/>
+            <K l="Taxa Entrada" v={wd.m.leadsAds>0?pct(wd.txE):"–"} c="#22c55e"/>
+            <K l="Taxa Saída" v={wd.m.leadsEntrada>0?pct(wd.txS):"–"} c="#f59e0b"/>
+          </div>
+          <div style={{...cs,padding:"14px 20px",marginBottom:24,display:"flex",gap:24,flexWrap:"wrap"}}>
+            {[{l:"Total Cliques",v:fmt(wd.tc),c:"#fff"},{l:"Pico",v:fmt(wd.pm),c:"#8b5cf6"},{l:"CTR Ativo",v:pct(wd.st.ativoCTR),c:"#22c55e"},{l:"CTR Passados",v:wd.st.passivoCTR>0?pct(wd.st.passivoCTR):"–",c:"#f59e0b"},{l:"Grupo Ativo",v:wd.st.grupoAtivo,c:"#8b5cf6"}].map((s,i)=>(
+              <div key={i}><p style={{fontSize:10,color:"#666",margin:"0 0 2px",textTransform:"uppercase",letterSpacing:.5}}>{s.l}</p><p style={{fontSize:16,fontWeight:800,color:s.c,margin:0}}>{s.v}</p></div>
+            ))}
+          </div>
+          <h3 style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:12}}>Lives Individuais</h3>
+          <div style={{display:"grid",gap:14}}>{wd.evs.map((ev,i)=><LC key={i} ev={ev}/>)}</div>
+        </div>
+      )}
+
+      <div style={{marginTop:40,paddingTop:16,borderTop:"1px solid #1a1a28",textAlign:"center"}}>
+        <p style={{fontSize:11,color:"#444"}}>Dashboard Lives Semanais · Grupo Rugido · {new Date().getFullYear()}</p>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(React.createElement(Dashboard), document.getElementById('root'));
+</script>
+</body>
+</html>
